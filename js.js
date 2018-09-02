@@ -632,6 +632,14 @@ const game = {
    * @param {KeyboardEvent} event
    */
   keyDownHandler(event) {
+    // Обработаем нажатие на Enter и пробел, если нажали, запускаем игру
+    if (event.code === 'Enter' || event.code === 'Space') {
+      if (this.status.isPlaying()) {
+        this.stop();
+      } else if (this.status.isStopped()) {
+        this.play();
+      }
+    }
     // Если статус игры не "играем", значит обрабатывать ничего не нужно.
     if (!this.status.isPlaying()) {
       return;
