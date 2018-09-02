@@ -5,13 +5,15 @@
  * @property {int} rowsCount Количество строк.
  * @property {int} colsCount Количество колонок.
  * @property {int} speed Скорость змейки.
- * @property {int} winLength Длина змейки для победы.
+ * @property {int} winLength Длина змейки для победы в уровне.
+ * @property {int} winSpeed Скорость змейки для победы в игре.
  */
 const settings = {
   rowsCount: 21,
   colsCount: 21,
   speed: 2,
   winFoodCount: 50,
+  winSpeed: 10,
 };
 
 /**
@@ -52,7 +54,14 @@ const config = {
   },
 
   /**
-   * @returns {int} Отдает количество еды, которое надо съесть для победы.
+   * @returns {int} Отдает скорость змейки которую надо достигнуть для победы в игре.
+   */
+  getWinSpeed() {
+    return this.settings.winSpeed;
+  },
+
+  /**
+   * @returns {int} Отдает количество еды, которое надо съесть для победы в уровне.
    */
   getWinFoodCount() {
     return this.settings.winFoodCount;
@@ -419,6 +428,52 @@ const score = {
 };
 
 /**
+ * Объект отображения уровня игры
+ * @property {int} level Уровень игры
+ * @property {HTMLElement} levelEl DOM-элемент для вставки уровня игры
+ */
+const levelUI = {
+  level: null,
+  levelEl: null,
+
+  /**
+   * Инициализирует счетчик уровня
+   */
+  init() {
+    // Найдем объект для отображения уровня
+    this.levelEl = document.getElementById('level');
+    this.drop();
+  },
+
+  /**
+   * Инкрементирует уровень
+   */
+  increment() {
+    // Инкрементируем уровень
+    this.level++;
+    // Вызываем рендер
+    this.render();
+  },
+
+  /**
+   * Ставит уровень в первый и отрисовывает
+   */
+  drop() {
+    // Ставим уровень в начало
+    this.level = 1;
+    // Вызываем рендер
+    this.render();
+  },
+
+  /**
+   * Отрисовывает уровень игры
+   */
+  render() {
+    this.levelEl.textContent = this.level;
+  }
+};
+
+/**
  * Объект игры.
  * @property {settings} settings Настройки игры.
  * @property {map} map Объект отображения.
@@ -426,6 +481,7 @@ const score = {
  * @property {food} food Объект еды.
  * @property {status} status Статус игры.
  * @property {score} score Счет игры
+ * @property {levelUI} levelUI Объект, отображающий уровень игры
  * @property {int} tickInterval Номер интервала игры.
  */
 const game = {
@@ -435,6 +491,7 @@ const game = {
   food,
   status,
   score,
+  levelUI,
   tickInterval: null,
 
   /**
@@ -462,6 +519,9 @@ const game = {
 
     // Инициализируем счетчик
     this.score.init();
+
+    // Инициализируем уровень
+    this.levelUI.init();
   },
 
   /**
@@ -512,6 +572,15 @@ const game = {
     clearInterval(this.tickInterval);
     // Меняем название кнопки в меню на "Игра закончена" и делаем ее неактивной.
     this.setPlayButton('Игра закончена', true);
+    this.showVictory();
+  },
+
+  /**
+   * Отображает сообщение о выиграше, вместо счета и уровня
+   */
+  showVictory() {
+    const UiElement = document.getElementById('game-score');
+    UiElement.textContent = 'Победа!!!!'
   },
 
   /**
@@ -530,10 +599,21 @@ const game = {
       this.food.setCoordinates(this.getRandomFreeCoordinates());
       // Инкрементируем счетчик
       this.score.increment();
-      // Если выиграли, завершаем игру.
+      // Если выиграли, увеличиваем уровень игры.
+      if (this.isLevelWon()) {
+        this.levelUp(this.config.getSpeed());
+        // Инициализируем карту.
+        this.map.init(this.config.getRowsCount(), this.config.getColsCount());
+        // Ставим игру в начальное положение.
+        this.reset();
+        // Сбросим счетчик в начало
+        this.score.init();
+        // Повысим уровень 
+        this.levelUI.increment();
+      }
+      // Если победа, завершаем
       if (this.isGameWon()) {
         this.finish();
-        alert('Победа!');
       }
     }
     // Перемещаем змейку.
@@ -625,6 +705,10 @@ const game = {
   newGameClickHandler() {
     // Ставим игру в начальное положение.
     this.reset();
+    // Обновляем настройки
+    this.config.init({speed: 5})
+    //Сбросим уровень в начало
+    this.levelUI.init();
   },
 
   /**
@@ -692,11 +776,19 @@ const game = {
   },
 
   /**
-   * Проверяем произошла ли победа, судим по очкам игрока (длине змейки).
+   * Проверяем произошла ли победа в уровне, судим по очкам игрока.
+   * @returns {boolean} true, если игрок выиграл уровень, иначе false.
+   */
+  isLevelWon() {
+    return this.score.count === this.config.getWinFoodCount();
+  },
+
+  /**
+   * Проверяем произошла ли победа, судим по уровню игрока (скорости змейки).
    * @returns {boolean} true, если игрок выиграл игру, иначе false.
    */
   isGameWon() {
-    return this.score.count === this.config.getWinFoodCount();
+    return this.config.getSpeed() === this.config.getWinSpeed();
   },
 
   /**
@@ -709,6 +801,15 @@ const game = {
     // Змейка может сделать шаг если следующая точка не на теле змейки и точка внутри игрового поля.
     return !this.snake.isOnPoint(nextHeadPoint);
   },
+
+  /**
+   * Повышает уровень(скорость игры)
+   * @param {int} curSpeed - Текущая скорость игры 
+   */
+  levelUp(curSpeed) {
+    curSpeed++;
+    this.config.init({speed: curSpeed});
+  }
 };
 
 // При загрузке страницы инициализируем игру.
